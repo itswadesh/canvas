@@ -17,13 +17,13 @@
 		</svg>
 		<ul>
 			<li class:active={$page.url.pathname === '/'}>
-				<a href="/">Home</a>
+				<a href="/">Transformer</a>
 			</li>
-			<li class:active={$page.url.pathname === '/about'}>
-				<a href="/about">About</a>
+			<li class:active={$page.url.pathname === '/touch'}>
+				<a href="/touch">Touch</a>
 			</li>
-			<li class:active={$page.url.pathname.startsWith('/sverdle')}>
-				<a href="/sverdle">Sverdle</a>
+			<li class:active={$page.url.pathname.startsWith('/export')}>
+				<a href="/export">Export</a>
 			</li>
 		</ul>
 		<svg viewBox="0 0 2 3" aria-hidden="true">
@@ -32,7 +32,7 @@
 	</nav>
 
 	<div class="corner">
-		<a href="https://github.com/sveltejs/kit">
+		<a href="https://github.com/itswadesh/svelte-commerce">
 			<img src={github} alt="GitHub" />
 		</a>
 	</div>
