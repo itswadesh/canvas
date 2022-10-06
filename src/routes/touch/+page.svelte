@@ -4,65 +4,123 @@ import Konva from 'konva'
 let container
 let json=''
 onMount(() => {
-function writeMessage(message) {
-        text.text(message);
-      }
+// by default Konva prevent some events when node is dragging
+      // it improve the performance and work well for 95% of cases
+      // we need to enable all events on Konva, even when we are dragging a node
+      // so it triggers touchmove correctly
+      Konva.hitOnDragEnabled = true;
+
+      var width = window.innerWidth;
+      var height = window.innerHeight;
 
       var stage = new Konva.Stage({
         container: 'container',
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width: width,
+        height: height,
+        draggable: true,
       });
 
       var layer = new Konva.Layer();
 
       var triangle = new Konva.RegularPolygon({
-        x: 80,
-        y: 120,
+        x: 190,
+        y: stage.height() / 2,
         sides: 3,
         radius: 80,
-        fill: '#00D2FF',
+        fill: 'green',
         stroke: 'black',
         strokeWidth: 4,
       });
 
-      var text = new Konva.Text({
-        x: 10,
-        y: 10,
-        fontFamily: 'Calibri',
-        fontSize: 24,
-        text: '',
-        fill: 'black',
-      });
-
       var circle = new Konva.Circle({
-        x: 230,
-        y: 100,
-        radius: 60,
+        x: 380,
+        y: stage.height() / 2,
+        radius: 70,
         fill: 'red',
         stroke: 'black',
         strokeWidth: 4,
       });
 
-      triangle.on('touchmove', function () {
-        var touchPos = stage.getPointerPosition();
-        var x = touchPos.x - 190;
-        var y = touchPos.y - 40;
-        writeMessage('x: ' + x + ', y: ' + y);
+      function getDistance(p1, p2) {
+        return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+      }
+
+      function getCenter(p1, p2) {
+        return {
+          x: (p1.x + p2.x) / 2,
+          y: (p1.y + p2.y) / 2,
+        };
+      }
+      var lastCenter = null;
+      var lastDist = 0;
+
+      stage.on('touchmove', function (e) {
+        e.evt.preventDefault();
+        var touch1 = e.evt.touches[0];
+        var touch2 = e.evt.touches[1];
+
+        if (touch1 && touch2) {
+          // if the stage was under Konva's drag&drop
+          // we need to stop it, and implement our own pan logic with two pointers
+          if (stage.isDragging()) {
+            stage.stopDrag();
+          }
+
+          var p1 = {
+            x: touch1.clientX,
+            y: touch1.clientY,
+          };
+          var p2 = {
+            x: touch2.clientX,
+            y: touch2.clientY,
+          };
+
+          if (!lastCenter) {
+            lastCenter = getCenter(p1, p2);
+            return;
+          }
+          var newCenter = getCenter(p1, p2);
+
+          var dist = getDistance(p1, p2);
+
+          if (!lastDist) {
+            lastDist = dist;
+          }
+
+          // local coordinates of center point
+          var pointTo = {
+            x: (newCenter.x - stage.x()) / stage.scaleX(),
+            y: (newCenter.y - stage.y()) / stage.scaleX(),
+          };
+
+          var scale = stage.scaleX() * (dist / lastDist);
+
+          stage.scaleX(scale);
+          stage.scaleY(scale);
+
+          // calculate new position of the stage
+          var dx = newCenter.x - lastCenter.x;
+          var dy = newCenter.y - lastCenter.y;
+
+          var newPos = {
+            x: newCenter.x - pointTo.x * scale + dx,
+            y: newCenter.y - pointTo.y * scale + dy,
+          };
+
+          stage.position(newPos);
+
+          lastDist = dist;
+          lastCenter = newCenter;
+        }
       });
 
-      circle.on('touchstart', function () {
-        writeMessage('Touchstart circle');
-      });
-      circle.on('touchend', function () {
-        writeMessage('Touchend circle');
+      stage.on('touchend', function () {
+        lastDist = 0;
+        lastCenter = null;
       });
 
       layer.add(triangle);
       layer.add(circle);
-      layer.add(text);
-
-      // add the layer to the stage
       stage.add(layer);
 })
       </script>
