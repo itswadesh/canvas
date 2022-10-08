@@ -3,150 +3,169 @@ import { onMount } from 'svelte'
 import Konva from 'konva'
 let container
 let json=''
+let state
+let layer
+let stage
+let appHistoryStep = 0
+let appHistory = [state];
+state = [createYoda({ x: 50, y: 50 })];
+ let possibleFilters = [''];
+let width = window.innerWidth;
+let height = window.innerHeight;
 onMount(() => {
-	var width = window.innerWidth;
-      var height = window.innerHeight;
-
-      var stage = new Konva.Stage({
+      stage = new Konva.Stage({
         container: 'container',
         width: width,
         height: height,
       });
-
-      var layer = new Konva.Layer();
+      layer = new Konva.Layer();
       stage.add(layer);
-
-      var rect1 = new Konva.Rect({
-        x: 60,
-        y: 60,
-        width: 100,
-        height: 90,
-        fill: 'red',
-        name: 'rect',
-        draggable: true,
-      });
-      layer.add(rect1);
-
-      var rect2 = new Konva.Rect({
-        x: 250,
-        y: 100,
-        width: 150,
-        height: 90,
-        fill: 'green',
-        name: 'rect',
-        draggable: true,
-      });
-      layer.add(rect2);
-
-      var tr = new Konva.Transformer();
-      layer.add(tr);
-
-      // by default select all shapes
-      tr.nodes([rect1]);
-      tr.nodes([rect2]);
-
-      // add a new feature, lets add ability to draw selection rectangle
-      var selectionRectangle = new Konva.Rect({
-        fill: 'rgba(0,0,255,0.5)',
-        visible: false,
-      });
-      layer.add(selectionRectangle);
-
-      var x1, y1, x2, y2;
-      stage.on('mousedown touchstart', (e) => {
-        // do nothing if we mousedown on any shape
-        if (e.target !== stage) {
-          return;
-        }
-        e.evt.preventDefault();
-        x1 = stage.getPointerPosition().x;
-        y1 = stage.getPointerPosition().y;
-        x2 = stage.getPointerPosition().x;
-        y2 = stage.getPointerPosition().y;
-
-        selectionRectangle.visible(true);
-        selectionRectangle.width(0);
-        selectionRectangle.height(0);
-      });
-
-      stage.on('mousemove touchmove', (e) => {
-        // do nothing if we didn't start selection
-        if (!selectionRectangle.visible()) {
-          return;
-        }
-        e.evt.preventDefault();
-        x2 = stage.getPointerPosition().x;
-        y2 = stage.getPointerPosition().y;
-
-        selectionRectangle.setAttrs({
-          x: Math.min(x1, x2),
-          y: Math.min(y1, y2),
-          width: Math.abs(x2 - x1),
-          height: Math.abs(y2 - y1),
-        });
-      });
-
-      stage.on('mouseup touchend', (e) => {
-        // do nothing if we didn't start selection
-        if (!selectionRectangle.visible()) {
-          return;
-        }
-        e.evt.preventDefault();
-        // update visibility in timeout, so we can check it in click event
-        setTimeout(() => {
-          selectionRectangle.visible(false);
-        });
-
-        var shapes = stage.find('.rect');
-        var box = selectionRectangle.getClientRect();
-        var selected = shapes.filter((shape) =>
-          Konva.Util.haveIntersection(box, shape.getClientRect())
-        );
-        tr.nodes(selected);
-      });
-
-      // clicks should select/deselect shapes
-      stage.on('click tap', function (e) {
-        // if we are selecting with rect, do nothing
-        if (selectionRectangle.visible()) {
-          return;
-        }
-
-        // if click on empty area - remove all selections
-        if (e.target === stage) {
-          tr.nodes([]);
-          return;
-        }
-
-        // do nothing if clicked NOT on our rectangles
-        if (!e.target.hasName('rect')) {
-          return;
-        }
-
-        // do we pressed shift or ctrl?
-        const metaPressed = e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey;
-        const isSelected = tr.nodes().indexOf(e.target) >= 0;
-
-        if (!metaPressed && !isSelected) {
-          // if no key pressed and the node is not selected
-          // select just one
-          tr.nodes([e.target]);
-        } else if (metaPressed && isSelected) {
-          // if we pressed keys and node was selected
-          // we need to remove it from selection:
-          const nodes = tr.nodes().slice(); // use slice to have new copy of array
-          // remove node from array
-          nodes.splice(nodes.indexOf(e.target), 1);
-          tr.nodes(nodes);
-        } else if (metaPressed && !isSelected) {
-          // add the node into selection
-          const nodes = tr.nodes().concat([e.target]);
-          tr.nodes(nodes);
-        }
-      });
+      create(state);
 })
-</script>
+function saveStateToHistory(state) {
+  appHistory = appHistory.slice(0, appHistoryStep + 1);
+  appHistory = appHistory.concat([state]);
+  appHistoryStep += 1;
+}
+function create() {
+  layer.destroyChildren();
+  state && state.forEach((item, index) => {
+    var node = new Konva.Image({
+      draggable: true,
+      name: 'item-' + index,
+      // make it smaller
+      scaleX: 0.5,
+      scaleY: 0.5,
+    });
+    layer.add(node);
+    node.on('dragend', () => {
+      // make new state
+      state = state.slice();
+      // update object data
+      state[index] = Object.assign({}, state[index], {
+        x: node.x(),
+        y: node.y(),
+      });
+      // save it into history
+      saveStateToHistory(state);
+      // don't need to call update here
+      // because changes already in node
+    });
 
+    node.on('click', () => {
+      // find new filter
+      var oldFilterIndex = possibleFilters.indexOf(state[index].filter);
+      var nextIndex = (oldFilterIndex + 1) % possibleFilters.length;
+      var filter = possibleFilters[nextIndex];
+
+      // apply state changes
+      state = state.slice();
+      state[index] = Object.assign({}, state[index], {
+        filter: filter,
+      });
+      // save state to history
+      saveStateToHistory(state);
+      // update canvas from state
+      update(state);
+    });
+
+    var img = new window.Image();
+    img.onload = function () {
+      node.image(img);
+      update(state);
+    };
+    img.src = item.src;
+  });
+  update(state);
+}
+function update() {
+  state && state.forEach(function (item, index) {
+    var node = stage.findOne('.item-' + index);
+    node.setAttrs({
+      x: item.x,
+      y: item.y,
+    });
+
+    if (!node.image()) {
+      return;
+    }
+    if (item.filter === 'blur') {
+      node.filters([Konva.Filters.Blur]);
+      node.blurRadius(10);
+      node.cache();
+    } else if (item.filter === 'invert') {
+      node.filters([Konva.Filters.Invert]);
+      node.cache();
+    } else {
+      node.filters([]);
+      node.clearCache();
+    }
+  });
+}
+function createObject(attrs) {
+  return Object.assign({}, attrs, {
+    x: 0,
+    y: 0,
+    src: '',
+  });
+}
+function createYoda(attrs) {
+  return Object.assign(createObject(attrs), {
+    src: 'https://ik.imagekit.io/3wzatecz51w3i/zapvi/product/20220831/2664-uwllc20wpd7x.jpg?tr=w-416,h-480:w-416,h-480',
+  });
+}
+function createDarth(attrs) {
+  return Object.assign(createObject(attrs), {
+    src: 'https://ik.imagekit.io/3wzatecz51w3i/zapvi/product/20220831/2660-nbivebd9leuf.jpg?tr=w-416,h-480:w-416,h-480',
+  });
+}
+function createYoda1(){
+    // create new object
+    state.push(
+      createYoda({
+        x: 100,
+        y: 100,
+      })
+    );
+    // recreate canvas
+    create(state);
+  }
+
+function createDarth1(){
+    // create new object
+    state.push(
+      createDarth({
+        x: 100,
+        y: 100,
+      })
+    );
+    // recreate canvas
+    create(state);
+  }
+
+function  undo () {
+  if (appHistoryStep === 0) {
+    return;
+  }
+  appHistoryStep -= 1;
+  state = appHistory[appHistoryStep];
+  // create everything from scratch
+  create(state);
+}
+function  redo () {
+        if (appHistoryStep === appHistory.length - 1) {
+          return;
+        }
+        appHistoryStep += 1;
+        state = appHistory[appHistoryStep];
+        // create everything from scratch
+        create(state);
+      }
+</script>
+<button on:click="{createYoda1}">Create yoda</button>
+<button on:click="{createDarth1}">Create darth</button>
+<button on:click="{undo}">Undo</button>
+<button on:click="{redo}">Redo</button>
 <div bind:this="{container}" id="container"></div>
 <!-- <button on:click="{toJSON}">export</button> -->
 <br />
